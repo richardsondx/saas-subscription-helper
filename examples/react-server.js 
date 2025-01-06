@@ -1,0 +1,26 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const SubscriptionHelper = require('saas-subscription-helper');
+
+const subscriptionHelper = new SubscriptionHelper({
+    stripeApiKey: process.env.STRIPE_SECRET_KEY,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_KEY,
+    table: 'users',
+    emailField: 'email',
+    subscriptionField: 'subscription_status',
+});
+
+const app = express();
+
+app.post('/webhooks', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const result = await subscriptionHelper.handleWebhooks(req);
+        res.status(200).send(result);
+    } catch (error) {
+        console.error('Webhook error:', error.message);
+        res.status(400).send('Webhook error');
+    }
+});
+
+app.listen(3001, () => console.log('React server listening on port 3001'));

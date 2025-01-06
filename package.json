@@ -1,0 +1,28 @@
+{
+    "name": "saas-subscription-helper",
+    "version": "1.0.0",
+    "description": "A helper package for integrating Stripe Payment Links with Supabase in SaaS applications.",
+    "main": "src/index.js",
+    "scripts": {
+      "start": "node server.js", 
+      "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+      "stripe",
+      "payment-links",
+      "supabase",
+      "saas",
+      "subscription-management"
+    ],
+    "author": "Richardson Dackam",
+    "license": "MIT",
+    "dependencies": {
+      "stripe": "^17.5.0",
+      "@supabase/supabase-js": "^2.0.0",
+      "express": "^4.18.2",
+      "body-parser": "^1.20.2",
+      "micro": "^9.4.1"
+    },
+    "devDependencies": {}
+  }
+  

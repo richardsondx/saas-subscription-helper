@@ -1,8 +1,11 @@
 # SaaS Subscription Helper 🚧 (in development)
 
-This is not production ready yet.
+<p align="center">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/2560px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" height="40" style="margin-right: 20px"/>
+  <img src="https://images.seeklogo.com/logo-png/43/1/supabase-logo-png_seeklogo-435677.png?v=1957124687587900112" alt="Supabase" height="40"/>
+</p>
 
-[![Image from Gyazo](https://i.gyazo.com/2029cafd88af6c91aa1d3e5a9d1202ea.png)](https://gyazo.com/2029cafd88af6c91aa1d3e5a9d1202ea)
+⚠️ This is not production ready yet.
 
 SaaS Subscription Helper is an open-source Node.js package designed to streamline Stripe and Supabase integration in your SaaS applications. It focuses on handling subscription updates, cancellations, and syncing data with your database.
 
@@ -14,15 +17,16 @@ SaaS Subscription Helper is an open-source Node.js package designed to streamlin
 
 ### How It Works
 
-[![Image from Gyazo](https://i.gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6.png)](https://gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6)
-
-▶️ View test project here: https://github.com/richardsondx/subscription-helper-demo
-
-- User Pays via Payment Link: You create payment links in Stripe, where the user's email is captured.
+- User Pays via Payment Link: You can easily create payment links in Stripe, where the user's email is captured.
 - Stripe Webhook Triggers: Stripe sends updates (e.g., subscription.updated) to your webhook endpoint.
 - Helper Syncs Supabase: The package updates your Supabase table with the user's subscription details, keeping your app in sync.
 - Users Manage Subscriptions: Handle upgrades or cancellations with simple functions.
 
+
+
+
+▶️ View test project where we used the package here: https://github.com/richardsondx/subscription-helper-demo
+[![Image from Gyazo](https://i.gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6.png)](https://gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6)
 
 ## Installation
 
@@ -65,6 +69,8 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 ```
 
 ### 2. Create a Payment Link
+
+[![Image from Gyazo](https://i.gyazo.com/d08642d79c353807e8b429a0e1b2ad47.png)](https://gyazo.com/d08642d79c353807e8b429a0e1b2ad47)
 
 Stripe Payment Links allow you to generate URLs for your subscription plans.
 

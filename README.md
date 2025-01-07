@@ -550,6 +550,14 @@ When debug mode is enabled, you'll see detailed logs about:
 - Subscription updates and cancellations
 - Error details
 
+### Helper Functions
+
+- `upgradeUserSubscription(email, newPriceId)`: Upgrade a user's subscription to a new plan
+- `cancelUserSubscription(email)`: Cancel a user's subscription
+- `fetchSubscription(email)`: Fetch a user's subscription details from Stripe
+- `changePlan(email, newPriceId)`: Change a user's subscription plan
+- `syncSubscription(email)`: Sync a user's subscription details with Supabase
+
 ### File Structure
 
 ```

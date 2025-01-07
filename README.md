@@ -15,14 +15,19 @@ SaaS Subscription Helper is an open-source Node.js package designed to streamlin
 - **Supabase Integration:** Keep your database in sync with Stripe for subscription status and plans.
 - **Minimal Setup:** Focus only on what's essential—5-minute setup!
 
-### How It Works
+### How It Works ( A 5 minute setup)
 
+1. Install the package 📦
+2. Add environment variables for Stripe and Supabase 🔑
+3. Set Up Webhook Endpoint 🔄
+4. Create Payment Links in Stripe, add the links to your app 💳
+DONE ✅ ☕️
+
+The experience is seamless for you and your users:
 - User Pays via Payment Link: You can easily create payment links in Stripe, where the user's email is captured.
-- Stripe Webhook Triggers: Stripe sends updates (e.g., subscription.updated) to your webhook endpoint.
+- Stripe Webhook Triggers: Stripe sends updates (e.g., subscription.updated) to your webhook endpoint which the package handles for you.
 - Helper Syncs Supabase: The package updates your Supabase table with the user's subscription details, keeping your app in sync.
-- Users Manage Subscriptions: Handle upgrades or cancellations with simple functions.
-
-
+- Subscriptions Management: Adding upgrade, dowgrade and cancellation logic is as easy as adding a link to your app.
 
 
 ▶️ View test project where we used the package here: https://github.com/richardsondx/subscription-helper-demo
@@ -456,7 +461,7 @@ const subscriptionHelper = new SubscriptionHelper({
     debugHeaders: false,
     prorationBehavior: 'create_prorations',
     
-    // Sync additional Stripe fields with your database
+    // OPTIONAL – Sync additional Stripe fields with your database
     syncedStripeFields: {
         stripe_customer_id: true,        // Store Stripe Customer ID
         payment_last4: true,             // Store last 4 digits of card
@@ -468,6 +473,8 @@ const subscriptionHelper = new SubscriptionHelper({
     }
 });
 ```
+
+syncedStripeFields are all set to false by default, unless explicitly set to true in the configuration.
 
 **Note:** When using `syncedStripeFields`, make sure your database table has the corresponding columns:
 
@@ -502,6 +509,7 @@ CREATE TABLE users (
 );
 ```
 
+Some fields are required, but you can customize the table and column names in the configuration:
 You can customize the table and column names in the configuration:
 
 ```javascript
@@ -518,16 +526,6 @@ const subscriptionHelper = new SubscriptionHelper({
 - `email`: Stores the user's email address (used as identifier)
 - `subscription_status`: Stores the Stripe subscription status (e.g., 'active', 'canceled')
 - `plan`: Stores the Stripe Price ID of the current subscription plan
-
-Common Subscription Statuses from stripes:
-1. `active` - The subscription is in good standing and the customer is being billed
-2. `canceled` - The subscription has been canceled and will not renew
-3. `incomplete` - Initial payment attempt failed but can be retried
-4. `incomplete_expired` - Initial payment failed and the subscription expired
-5. `past_due` - Payment failed on a recurring billing
-6. `trialing` - In trial period before first billing
-7. `unpaid` - Payment failed and subscription needs manual intervention
-8. `paused` - Subscription temporarily paused (if pause feature enabled)
 
 
 ### Example with Debug Mode
@@ -562,6 +560,9 @@ saas-subscription-helper/
 │   │   ├── handleWebhooks.js     # Handles Stripe webhook events
 │   │   ├── upgradeSubscription.js # Logic for upgrading subscriptions
 │   │   ├── cancelSubscription.js  # Logic for canceling subscriptions
+│   │   ├── fetchSubscription.js   # Retrieves subscription details from Stripe
+│   │   ├── changePlan.js         # Handles plan changes (upgrades/downgrades)
+│   |   ├── syncSubscription.js   # Syncs Stripe subscription data with Supabase
 │   │   └── index.js             # Exports Stripe-related functions
 │   └── supabase/
 │       ├── updateUser.js         # Updates user subscription data in Supabase

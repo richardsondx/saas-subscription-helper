@@ -1,6 +1,6 @@
 // The main entry point for the package. Handles initialization and exposes helper functions.
 
-const { handleWebhooks, upgradeSubscription, cancelSubscription } = require('./stripe');
+const { handleWebhooks, upgradeSubscription, cancelSubscription, changePlan, fetchSubscription, syncSubscription } = require('./stripe');
 const { updateUser, fetchUser } = require('./supabase');
 const validateConfig = require('./utils/validateConfig');
 
@@ -13,8 +13,8 @@ class SubscriptionHelper {
         return handleWebhooks(this.config, req);
     }
 
-    async upgradeUserSubscription(email, newPlan) {
-        return upgradeSubscription(this.config, email, newPlan);
+    async changeUserPlan(email, newPlan, options = {}) {
+        return changePlan(this.config, email, newPlan, options);
     }
 
     async cancelUserSubscription(email) {
@@ -27,6 +27,14 @@ class SubscriptionHelper {
 
     async fetchUserFromSupabase(email) {
         return fetchUser(this.config, email);
+    }
+
+    async fetchSubscription(email) {
+        return fetchSubscription(this.config, email);
+    }
+
+    async syncSubscription(email) {
+        return syncSubscription(this.config, email);
     }
 }
 

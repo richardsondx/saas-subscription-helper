@@ -50,14 +50,39 @@ async function handleWebhooks(config, req) {
             config.stripeWebhookSecret
         );
 
-        if (config.debug) console.log(`[DEBUG] Successfully constructed event: ${event.type}`);
+        if (config.debug) console.log(`[DEBUG] Processing event: ${event.type}`);
 
-        if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+        // Handle new subscription creation from payment link
+        if (event.type === 'customer.subscription.created') {
+            const newSubscription = event.data.object;
+            const customer = await stripeClient.customers.retrieve(newSubscription.customer);
+            
+            // Check for other active subscriptions that need cancellation
+            const existingSubscriptions = await stripeClient.subscriptions.list({
+                customer: newSubscription.customer,
+                status: 'active'
+            });
+
+            // Cancel any old subscriptions immediately if we find a new one
+            for (const sub of existingSubscriptions.data) {
+                if (sub.id !== newSubscription.id) {
+                    await stripeClient.subscriptions.cancel(sub.id, {
+                        prorate: true
+                    });
+                }
+            }
+        }
+
+        if (event.type === 'customer.subscription.updated' || 
+            event.type === 'customer.subscription.deleted' ||
+            event.type === 'customer.subscription.cancelled') {
             try {
                 const subscription = event.data.object;
                 const email = subscription.customer_email ||
                              (await stripeClient.customers.retrieve(subscription.customer)).email;
-                const status = subscription.status;
+                
+                // Get the correct status - important for cancellations
+                const status = subscription.cancel_at_period_end ? 'canceled' : subscription.status;
                 const plan = subscription.items.data[0].price.id;
 
                 if (!email) {
@@ -70,10 +95,24 @@ async function handleWebhooks(config, req) {
                     [config.planField || 'plan']: plan
                 };
 
+                // Add trial status if configured
+                if (config.syncedStripeFields?.trial) {
+                    updateData.trial = !!subscription.trial_end;
+                    if (subscription.trial_end) {
+                        updateData.trial_end = new Date(subscription.trial_end * 1000);
+                    }
+                }
+
                 if (config.debug) {
                     console.log(`[DEBUG] Updating user subscription details:`);
                     console.log(`- Email: ${email}`);
-                    console.log(`- Update data:`, updateData);
+                    console.log(`- Status: ${status}`);
+                    console.log(`- Plan: ${plan}`);
+                    if (subscription.trial_end) {
+                        console.log(`- Trial ends: ${new Date(subscription.trial_end * 1000)}`);
+                    }
+                    console.log(`- Cancel at period end: ${subscription.cancel_at_period_end}`);
+                    console.log(`- Event type: ${event.type}`);
                 }
 
                 const result = await updateUser(config, email, updateData);

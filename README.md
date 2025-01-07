@@ -1,4 +1,8 @@
-# SaaS Subscription Helper
+# SaaS Subscription Helper 🚧 (in development)
+
+This is not production ready yet.
+
+[![Image from Gyazo](https://i.gyazo.com/2029cafd88af6c91aa1d3e5a9d1202ea.png)](https://gyazo.com/2029cafd88af6c91aa1d3e5a9d1202ea)
 
 SaaS Subscription Helper is an open-source Node.js package designed to streamline Stripe and Supabase integration in your SaaS applications. It focuses on handling subscription updates, cancellations, and syncing data with your database.
 
@@ -9,6 +13,10 @@ SaaS Subscription Helper is an open-source Node.js package designed to streamlin
 - **Minimal Setup:** Focus only on what's essential—5-minute setup!
 
 ### How It Works
+
+[![Image from Gyazo](https://i.gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6.png)](https://gyazo.com/2c75e13f6e5dcbb62e076b19ea71b4d6)
+
+▶️ View test project here: https://github.com/richardsondx/subscription-helper-demo
 
 - User Pays via Payment Link: You create payment links in Stripe, where the user's email is captured.
 - Stripe Webhook Triggers: Stripe sends updates (e.g., subscription.updated) to your webhook endpoint.
@@ -79,6 +87,8 @@ Here’s how to set them up for development and production environments.
 - Success URL: https://yourdomain.com/subscription-callback
 
 In both environments, the success URL should redirect to your app, where users can complete onboarding after payment.
+
+[![Image from Gyazo](https://i.gyazo.com/f63114a6963fd8cccffb3d06b44a0350.png)](https://gyazo.com/f63114a6963fd8cccffb3d06b44a0350)
 
 ### 3. Set Up Webhooks
 
@@ -349,10 +359,28 @@ function SubscriptionManager({ userEmail }) {
         }
     };
 
+    const handleDowngrade = async (newPriceId) => {
+        try {
+            const res = await fetch('/api/subscription/downgrade', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: userEmail, newPriceId })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            // Handle success
+        } catch (error) {
+            // Handle error
+        }
+    };
+
     return (
         <div>
-            <button onClick={() => handleUpgrade('price_H5jTzsp2')}> 
-                Upgrade to Pro
+            <button onClick={() => handleUpgrade('price_premium')}>
+                Upgrade to Premium
+            </button>
+            <button onClick={() => handleDowngrade('price_basic')}>
+                Downgrade to Basic
             </button>
             <button onClick={handleCancel}>
                 Cancel Subscription
@@ -373,17 +401,84 @@ For best practices and advanced configuration tips, see our [Best Practices Guid
 ### Configuration
 
 Required Fields:
-- stripeApiKey: Your Stripe secret key.
-- supabaseUrl: Your Supabase project URL.
-- supabaseKey: Your Supabase service key.
-- table: The Supabase table storing user data.
-- emailField: The column in Supabase for user email.
-- subscriptionField: The column for subscription status.
+- stripeSecretKey: Your Stripe secret key
+- stripeWebhookSecret: The Stripe webhook signing secret
+- supabaseUrl: Your Supabase project URL
+- supabaseKey: Your Supabase service key
+- table: The Supabase table storing user data
+- emailField: The column in Supabase for user email
+- subscriptionField: The column for subscription status
 
 Optional Fields:
-- redirectUrl: Default URL users are redirected to after payment.
-- stripeWebhookSecret: The Stripe webhook signing secret.
+- planField: The column for storing plan/price IDs (default: 'plan')
 - debug: Enable debug logging (default: false)
+- debugHeaders: Log webhook headers (default: false, recommended false in production)
+- prorationBehavior: Stripe proration behavior for subscription changes (default: 'always_invoice')
+  - Options: 'always_invoice', 'create_prorations', 'none'
+- syncedStripeFields: Additional Stripe fields to sync with your database (all default to false)
+  - Available fields:
+    - stripe_customer_id: The Stripe Customer ID
+    - default_payment_method: The default payment method ID
+    - payment_last4: Last 4 digits of the card/payment method
+    - payment_brand: Card brand (visa, mastercard, etc.)
+    - payment_exp_month: Card expiration month
+    - payment_exp_year: Card expiration year
+    - current_period_start: Subscription period start date
+    - current_period_end: Subscription period end date
+    - cancel_at_period_end: Whether subscription will cancel at period end
+    - canceled_at: When the subscription was canceled
+    - trial: Whether the subscription is in trial period
+    - trial_start: Trial period start date
+    - trial_end: Trial period end date
+    - subscription_created_at: When the subscription was created
+
+Example configuration:
+```javascript
+const subscriptionHelper = new SubscriptionHelper({
+    // Required fields
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_KEY,
+    table: "profiles",
+    emailField: "email",
+    subscriptionField: "subscription_status",
+    
+    // Optional fields
+    planField: "stripe_plan",
+    debug: true,
+    debugHeaders: false,
+    prorationBehavior: 'create_prorations',
+    
+    // Sync additional Stripe fields with your database
+    syncedStripeFields: {
+        stripe_customer_id: true,        // Store Stripe Customer ID
+        payment_last4: true,             // Store last 4 digits of card
+        payment_brand: true,             // Store card brand
+        trial: true,                     // Track trial status
+        current_period_end: true,        // Store subscription end date
+        cancel_at_period_end: true,      // Store cancellation status
+        trial_end: true                  // Store trial end date
+    }
+});
+```
+
+**Note:** When using `syncedStripeFields`, make sure your database table has the corresponding columns:
+
+```sql
+ALTER TABLE users 
+    ADD COLUMN stripe_customer_id text,
+    ADD COLUMN payment_last4 text,
+    ADD COLUMN payment_brand text,
+    ADD COLUMN payment_exp_month integer,
+    ADD COLUMN payment_exp_year integer,
+    ADD COLUMN trial boolean,
+    ADD COLUMN current_period_end timestamp with time zone,
+    ADD COLUMN cancel_at_period_end boolean,
+    ADD COLUMN trial_end timestamp with time zone;
+```
+
+All `syncedStripeFields` default to `false` unless explicitly set to `true` in the configuration.
 
 ### Database Schema
 

@@ -40,23 +40,40 @@ describe('SubscriptionHelper class', () => {
 
     describe('instance methods', () => {
         it('handles webhooks', async () => {
-            // Simple mock request
+            jest.spyOn(console, 'log').mockImplementation(() => {});
+
             const req = {
                 rawBody: 'test-body',
-                headers: { 'stripe-signature': 'test-sig' }
+                headers: {
+                    'stripe-signature': 'test-signature'
+                }
             };
 
             mockStripe.webhooks.constructEvent.mockReturnValueOnce({
-                type: 'test.event',
-                data: { object: {} }
+                type: 'customer.subscription.updated',
+                data: {
+                    object: {
+                        id: 'sub_123',
+                        customer: 'cus_123',
+                        status: 'active',
+                        items: {
+                            data: [{
+                                price: { id: 'price_premium' }
+                            }]
+                        }
+                    }
+                }
+            });
+
+            mockStripe.customers.retrieve.mockResolvedValueOnce({
+                email: 'test@example.com'
             });
 
             await expect(helper.handleWebhooks(req)).resolves.not.toThrow();
 
-            // Only verify that parameters are passed correctly to the underlying function
             expect(mockStripe.webhooks.constructEvent).toHaveBeenCalledWith(
                 'test-body',
-                'test_sig',
+                'test-signature',
                 config.stripeWebhookSecret
             );
         });

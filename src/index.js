@@ -10,7 +10,14 @@ class SubscriptionHelper {
     }
 
     async handleWebhooks(req) {
-        return handleWebhooks(this.config, req);
+        if (!req || (!req.rawBody && !req.body) || !req.headers) {
+            throw new Error('Invalid request object');
+        }
+        return handleWebhooks(
+            this.config,
+            req.rawBody || req.body,
+            req.headers
+        );
     }
 
     async changeUserPlan(email, newPlan, options = {}) {

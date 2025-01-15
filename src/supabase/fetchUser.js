@@ -27,10 +27,15 @@ async function fetchUser(config, email) {
             throw new Error(`Error fetching user: ${error.message}`);
         }
 
+        if (!data) {
+            if (config.debug) console.log('[DEBUG] No user found');
+            return null;
+        }
+
         if (config.debug) console.log('[DEBUG] User fetched successfully');
         return data;
     } catch (error) {
-        if (config.debug) console.log('[DEBUG] Error in fetchUser:', error.message);
+        if (config.debug) console.log('[DEBUG] Error in fetchUser:', error);
         throw error;
     }
 }

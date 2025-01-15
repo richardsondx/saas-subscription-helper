@@ -4,25 +4,29 @@
     "description": "A helper package for integrating Stripe Payment Links with Supabase in SaaS applications.",
     "main": "src/index.js",
     "scripts": {
-      "start": "node server.js", 
-      "test": "echo \"Error: no test specified\" && exit 1"
+        "start": "node server.js",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
     },
     "keywords": [
-      "stripe",
-      "payment-links",
-      "supabase",
-      "saas",
-      "subscription-management"
+        "stripe",
+        "payment-links",
+        "supabase",
+        "saas",
+        "subscription-management"
     ],
     "author": "Richardson Dackam",
     "license": "MIT",
     "dependencies": {
-      "stripe": "^17.5.0",
-      "@supabase/supabase-js": "^2.0.0",
-      "express": "^4.18.2",
-      "body-parser": "^1.20.2",
-      "micro": "^9.4.1"
+        "@supabase/supabase-js": "^2.0.0",
+        "body-parser": "^1.20.2",
+        "express": "^4.18.2",
+        "micro": "^9.4.1",
+        "stripe": "^17.5.0"
     },
-    "devDependencies": {}
-  }
-  
+    "devDependencies": {
+        "@types/jest": "^29.5.14",
+        "jest": "^29.7.0"
+    }
+}

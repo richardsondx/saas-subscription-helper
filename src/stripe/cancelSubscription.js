@@ -11,8 +11,10 @@ async function cancelSubscription(config, email) {
     try {
         // Get user's current subscription details from Supabase
         const user = await fetchUser(config, email);
-        if (!user) {
-            throw new Error('User not found');
+        if (user === null || user === undefined) {
+            const error = new Error('User not found');
+            error.code = 'USER_NOT_FOUND';
+            throw error;
         }
 
         // Get customer's subscriptions from Stripe
@@ -22,7 +24,9 @@ async function cancelSubscription(config, email) {
         });
 
         if (!customer.data.length) {
-            throw new Error('No Stripe customer found for this email');
+            const error = new Error('No Stripe customer found for this email');
+            error.code = 'STRIPE_CUSTOMER_NOT_FOUND';
+            throw error;
         }
 
         const subscriptions = await stripeClient.subscriptions.list({

@@ -1,41 +1,62 @@
 // Handles user subscription upgrades.
 
 const stripe = require('stripe');
+const { fetchUser } = require('../supabase');
 
-async function upgradeSubscription(config, email, newPlan) {
-    if (config.debug) console.log(`[DEBUG] Attempting to upgrade subscription for email: ${email} to plan: ${newPlan}`);
+async function upgradeSubscription(config, email, newPriceId) {
+    if (config.debug) console.log('[DEBUG] Starting subscription upgrade...');
     
-    const stripeClient = stripe(config.stripeApiKey);
-    
-    if (config.debug) console.log('[DEBUG] Searching for customer in Stripe...');
-    const customer = await stripeClient.customers.search({
-        query: `email:'${email}'`,
-    });
+    const stripeClient = stripe(config.stripeSecretKey);
 
-    if (customer.data.length === 0) {
-        if (config.debug) console.log('[DEBUG] Customer not found in Stripe');
-        throw new Error('Customer not found');
+    try {
+        // Get user's current subscription details
+        const user = await fetchUser(config, email);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Find customer in Stripe
+        const customer = await stripeClient.customers.search({
+            query: `email:'${email}'`,
+        });
+
+        if (!customer.data.length) {
+            throw new Error('No Stripe customer found for this email');
+        }
+
+        // Get active subscription
+        const subscriptions = await stripeClient.subscriptions.list({
+            customer: customer.data[0].id,
+            status: 'active',
+            limit: 1
+        });
+
+        if (!subscriptions.data.length) {
+            throw new Error('Active subscription not found');
+        }
+
+        // Update the subscription
+        const subscription = await stripeClient.subscriptions.update(
+            subscriptions.data[0].id,
+            {
+                items: [{
+                    id: subscriptions.data[0].items.data[0].id,
+                    price: newPriceId
+                }],
+                proration_behavior: 'always_invoice'
+            }
+        );
+
+        return {
+            success: true,
+            subscription
+        };
+    } catch (error) {
+        if (config.debug) {
+            console.error('[DEBUG] Error in subscription upgrade:', error);
+        }
+        throw error;
     }
-
-    if (config.debug) console.log('[DEBUG] Found customer, fetching active subscriptions...');
-    const subscription = await stripeClient.subscriptions.list({
-        customer: customer.data[0].id,
-        status: 'active',
-    });
-
-    if (subscription.data.length === 0) {
-        if (config.debug) console.log('[DEBUG] No active subscription found');
-        throw new Error('Active subscription not found');
-    }
-
-    if (config.debug) console.log(`[DEBUG] Updating subscription to new plan: ${newPlan}`);
-    const updatedSubscription = await stripeClient.subscriptions.update(
-        subscription.data[0].id,
-        { items: [{ id: subscription.data[0].items.data[0].id, price: newPlan }] }
-    );
-
-    if (config.debug) console.log('[DEBUG] Subscription upgraded successfully');
-    return updatedSubscription;
 }
 
 module.exports = upgradeSubscription;

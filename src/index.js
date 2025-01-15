@@ -38,4 +38,12 @@ class SubscriptionHelper {
     }
 }
 
-module.exports = SubscriptionHelper;
+module.exports = {
+    SubscriptionHelper,
+    handleWebhooks,
+    upgradeSubscription,
+    cancelSubscription,
+    changePlan,
+    syncSubscription,
+    fetchSubscription
+};

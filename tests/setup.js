@@ -120,4 +120,9 @@ module.exports = {
             })
         }));
     }
-}; 
+};
+
+mockStripe.webhooks.constructEvent.mockImplementation((rawBody, signature, secret) => {
+    console.log('Mock received:', { rawBody, signature, secret }); // Debug log
+    // ... rest of mock
+}); 

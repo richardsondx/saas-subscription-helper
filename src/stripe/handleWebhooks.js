@@ -3,12 +3,21 @@
 const stripe = require('stripe');
 const updateUser = require('../supabase/updateUser');
 
-async function handleWebhooks(config, req) {
+async function handleWebhooks(config, rawBody, headers) {
     if (config.debug) console.log('[DEBUG] Starting webhook processing...');
     
     const stripeClient = stripe(config.stripeSecretKey);
     
-    const { rawBody, stripeSignature, headers } = req;
+    // Get stripe signature from headers
+    const stripeSignature = headers?.['stripe-signature'];
+
+    if (config.debug) {
+        console.log('Implementation received:', { 
+            rawBody, 
+            headers, 
+            signature: stripeSignature 
+        });
+    }
 
     if (config.debug && config.debugHeaders && headers) {
         console.log('[DEBUG] Received headers:', headers);
@@ -90,10 +99,20 @@ async function handleWebhooks(config, req) {
                     throw new Error('No email found in webhook data');
                 }
 
-                const updateData = {
-                    [config.subscriptionField]: status,
-                    [config.planField || 'plan']: plan
-                };
+                let updateData;
+                if (event.type === 'customer.subscription.deleted') {
+                    // For deleted subscriptions, set status to inactive and clear the plan
+                    updateData = {
+                        [config.subscriptionField]: 'inactive',
+                        [config.planField || 'plan']: null
+                    };
+                } else {
+                    // For other subscription events, use the values from Stripe
+                    updateData = {
+                        [config.subscriptionField]: status,
+                        [config.planField || 'plan']: plan
+                    };
+                }
 
                 // Add trial status if configured
                 if (config.syncedStripeFields?.trial) {
@@ -108,39 +127,19 @@ async function handleWebhooks(config, req) {
                     console.log(`- Email: ${email}`);
                     console.log(`- Status: ${status}`);
                     console.log(`- Plan: ${plan}`);
-                    if (subscription.trial_end) {
-                        console.log(`- Trial ends: ${new Date(subscription.trial_end * 1000)}`);
-                    }
-                    console.log(`- Cancel at period end: ${subscription.cancel_at_period_end}`);
                     console.log(`- Event type: ${event.type}`);
+                    console.log(`- Update data:`, updateData);
                 }
 
                 const result = await updateUser(config, email, updateData);
-                
-                if (config.debug) {
-                    console.log('[DEBUG] Update operation result:', result);
-                }
-
-                if (config.debug) console.log('[DEBUG] Successfully updated user subscription details');
-            } catch (error) {
-                if (config.debug) {
-                    console.error('[DEBUG] Error in subscription update:', {
-                        message: error.message,
-                        stack: error.stack,
-                        details: error.details
-                    });
-                }
-                throw error;
+            } catch (e) {
+                if (config.debug) console.log('[DEBUG] Error: Failed to update user subscription details');
+                throw e;
             }
         }
-
-        return { success: true };
-    } catch (error) {
-        if (config.debug) {
-            console.log('[DEBUG] Error processing webhook:');
-            console.log(error.message);
-        }
-        return { success: false, error: error.message };
+    } catch (e) {
+        if (config.debug) console.log('[DEBUG] Error: Failed to process webhook');
+        throw e;
     }
 }
 

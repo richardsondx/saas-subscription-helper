@@ -2,7 +2,6 @@ const { mockSupabase, mockStripe } = require('./setup');
 const {
     SubscriptionHelper,
     handleWebhooks,
-    upgradeSubscription,
     cancelSubscription,
     changePlan,
     syncSubscription,
@@ -163,7 +162,6 @@ describe('SubscriptionHelper class', () => {
     describe('standalone exports', () => {
         it('exports all required functions', () => {
             expect(handleWebhooks).toBeDefined();
-            expect(upgradeSubscription).toBeDefined();
             expect(cancelSubscription).toBeDefined();
             expect(changePlan).toBeDefined();
             expect(syncSubscription).toBeDefined();

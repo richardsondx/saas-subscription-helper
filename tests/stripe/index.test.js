@@ -1,7 +1,6 @@
 const { mockSupabase, mockStripe } = require('../setup');
 const {
     handleWebhooks,
-    upgradeSubscription,
     cancelSubscription,
     changePlan,
     fetchSubscription,
@@ -50,32 +49,6 @@ describe('stripe/index.js exports', () => {
             });
 
             await expect(handleWebhooks(config, rawBody, headers))
-                .resolves.not.toThrow();
-        });
-    });
-
-    describe('upgradeSubscription', () => {
-        it('exports upgradeSubscription function', async () => {
-            // Mock existing subscription
-            mockStripe.subscriptions.list.mockResolvedValueOnce({
-                data: [{
-                    id: 'sub_123',
-                    status: 'active',
-                    items: {
-                        data: [{
-                            price: { id: 'price_basic' }
-                        }]
-                    }
-                }]
-            });
-
-            // Mock subscription update
-            mockStripe.subscriptions.update.mockResolvedValueOnce({
-                id: 'sub_123',
-                status: 'active'
-            });
-
-            await expect(upgradeSubscription(config, 'test@example.com', 'price_new'))
                 .resolves.not.toThrow();
         });
     });
@@ -163,7 +136,6 @@ describe('stripe/index.js exports', () => {
     describe('error handling', () => {
         it('handles missing config', async () => {
             await expect(handleWebhooks()).rejects.toThrow();
-            await expect(upgradeSubscription()).rejects.toThrow();
             await expect(cancelSubscription()).rejects.toThrow();
             await expect(changePlan()).rejects.toThrow();
             await expect(fetchSubscription()).rejects.toThrow();
@@ -182,8 +154,6 @@ describe('stripe/index.js exports', () => {
             mockStripe.customers.retrieve.mockRejectedValue(new Error('Invalid API key'));
 
             await expect(handleWebhooks(invalidConfig, '{}', {}))
-                .rejects.toThrow();
-            await expect(upgradeSubscription(invalidConfig, 'test@example.com', 'price_new'))
                 .rejects.toThrow();
             await expect(cancelSubscription(invalidConfig, 'test@example.com'))
                 .rejects.toThrow();

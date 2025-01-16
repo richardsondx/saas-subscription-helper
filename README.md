@@ -10,10 +10,39 @@
 SaaS Subscription Helper is an open-source Node.js package designed to streamline Stripe and Supabase integration in your SaaS applications. It focuses on handling subscription updates, cancellations, and syncing data with your database.
 
 ## Features
-- **Stripe Webhook Handling:** Automatically update subscription data in your Supabase table.
-- **Manage Upgrades and Downgrades:** Simplify logic for user-initiated subscription changes.
-- **Supabase Integration:** Keep your database in sync with Stripe for subscription status and plans.
-- **Minimal Setup:** Focus only on what's essential—5-minute setup!
+
+- Webhook handling for subscription events
+- Subscription status syncing between Stripe and Supabase
+- Plan changes (upgrades/downgrades)
+- Subscription cancellation
+- Trial period support
+- Debug logging
+
+## API Reference
+
+### Subscription Management
+
+#### Change Plan
+```js
+const result = await subscriptionHelper.changeUserPlan('user@example.com', 'price_new');
+```
+
+- Changes a user's subscription plan
+- Handles both upgrades and downgrades
+- Preserves trial periods if configured
+- Returns detailed result object
+
+-#### Upgrade Subscription
+-```js
+-const result = await subscriptionHelper.upgradeSubscription('user@example.com', 'price_new');
+-```
+-
+-Upgrades a user's subscription to a new plan
+
+#### Cancel Subscription
+```js
+const result = await subscriptionHelper.cancelUserSubscription('user@example.com');
+```
 
 ### How It Works ( A 5 minute setup)
 

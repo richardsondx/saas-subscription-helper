@@ -18,8 +18,9 @@
 </p>
 
 
-
 SaaS Subscription Helper is an open-source Node.js package designed to streamline Stripe and Supabase integration in your SaaS applications. It focuses on handling subscription updates, cancellations, and syncing data with your database.
+
+View this project on GitHub: [https://github.com/richardsondx/saas-subscription-helper](https://github.com/richardsondx/saas-subscription-helper)
 
 ## Features
 

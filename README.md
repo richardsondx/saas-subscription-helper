@@ -1,9 +1,23 @@
 # SaaS Subscription Helper 🚧 (in development)
 
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/2560px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" height="40" style="margin-right: 20px"/>
-  <img src="https://images.seeklogo.com/logo-png/43/1/supabase-logo-png_seeklogo-435677.png?v=1957124687587900112" alt="Supabase" height="40"/>
+  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/2560px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" height="40" style="display: inline-block; margin-right: 20px"/>
+  <img src="https://images.seeklogo.com/logo-png/43/1/supabase-logo-png_seeklogo-435677.png?v=1957124687587900112" alt="Supabase" height="40" style="display: inline-block"/>
 </p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/saas-subscription-helper">
+    <img src="https://img.shields.io/npm/v/saas-subscription-helper.svg?style=flat-square" alt="NPM version"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/richardsondx/saas-subscription-helper">
+    <img src="https://img.shields.io/github/stars/richardsondx/saas-subscription-helper?style=social" alt="GitHub stars"/>
+  </a>
+</p>
+
+
 
 SaaS Subscription Helper is an open-source Node.js package designed to streamline Stripe and Supabase integration in your SaaS applications. It focuses on handling subscription updates, cancellations, and syncing data with your database.
 
@@ -31,11 +45,11 @@ const result = await subscriptionHelper.changeUserPlan('user@example.com', 'pric
 - Returns detailed result object
 
 #### Upgrade Subscription
--```js
--const result = await subscriptionHelper.upgradeSubscription('user@example.com', 'price_new');
--```
--
--Upgrades a user's subscription to a new plan
+```js
+const result = await subscriptionHelper.upgradeSubscription('user@example.com', 'price_new');
+```
+
+Upgrades a user's subscription to a new plan
 
 #### Cancel Subscription
 ```js
@@ -48,6 +62,7 @@ const result = await subscriptionHelper.cancelUserSubscription('user@example.com
 2. Add environment variables for Stripe and Supabase 🔑
 3. Set Up Webhook Endpoint 🔄
 4. Create Payment Links in Stripe, add the links to your app 💳
+5. Test the webhook locally using the Stripe CLI 🔄
 DONE ✅ ☕️
 
 The experience is seamless for you and your users:
@@ -77,36 +92,63 @@ npm install @supabase/supabase-js
 ## Quick Setup
 
 ### 1. Initialize the Helper
+Create a shared configuration file that you'll use throughout your application:
 
 ```javascript
+// lib/subscription.js
 const SubscriptionHelper = require('saas-subscription-helper');
 
-const subscriptionHelper = new SubscriptionHelper({
-    stripeApiKey: 'your-stripe-secret-key',
-    supabaseUrl: 'https://your-supabase-url.supabase.co',
-    supabaseKey: 'your-supabase-service-key',
+export const subscriptionHelper = new SubscriptionHelper({
+    stripeApiKey: process.env.STRIPE_SECRET_KEY,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_KEY,
     table: 'users',
     emailField: 'email',
     subscriptionField: 'subscription_status',
 });
 ```
 
-Make sure you have an .env file in the root of your project with the following variables:
+### 2. Set Up Webhooks
+Add the webhook endpoint to your app:
 
-```
-STRIPE_SECRET_KEY=sk_test_your_secret_key
-SUPABASE_URL=https://your_supabase_instance.supabase.co
-SUPABASE_KEY=your_supabase_service_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+```javascript
+// app/api/webhooks/route.js
+import { NextResponse } from 'next/server';
+import { subscriptionHelper } from '@/lib/subscription';
+
+export async function POST(req) {
+    try {
+        await subscriptionHelper.handleWebhooks({
+            rawBody: await req.text(),
+            stripeSignature: req.headers.get("stripe-signature"),
+            headers: Object.fromEntries(req.headers)
+        });
+        return NextResponse.json({ received: true });
+    } catch (err) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+}
 ```
 
-### 2. Create a Payment Link
+Test your webhook locally using the Stripe CLI:
+```bash
+stripe login
+```
+```bash
+stripe listen --forward-to localhost:3000/api/
+webhooks
+```
+
+### 3. Create Payment Links
 
 [![Image from Gyazo](https://i.gyazo.com/d08642d79c353807e8b429a0e1b2ad47.png)](https://gyazo.com/d08642d79c353807e8b429a0e1b2ad47)
 
-Stripe Payment Links allow you to generate URLs for your subscription plans.
 
-Here’s how to set them up for development and production environments.
+**Stripe Payment Links** allow you to generate URLs for your 
+subscription plans.
+
+Here’s how to set them up for development and production 
+environments.
 
 #### Development:
 1. Go to the Stripe Dashboard (Test Mode).
@@ -122,153 +164,89 @@ Here’s how to set them up for development and production environments.
 - Use your production products and pricing.
 - Generate a Payment Link.
 3. Set the Success URLx:
-- Success URL: https://yourdomain.com/subscription-callback
+- Success URL: https://yourdomain.com/
+subscription-callback
 
-In both environments, the success URL should redirect to your app, where users can complete onboarding after payment.
+
+Success URL is the URL that Stripe will redirect to after the user has completed the payment. You can send it wherever you want, but it's best to send it to your app, where users can complete onboarding after payment.
+
+In both environments, the success URL should redirect to 
+your app, where users can complete onboarding after 
+payment.
 
 [![Image from Gyazo](https://i.gyazo.com/f63114a6963fd8cccffb3d06b44a0350.png)](https://gyazo.com/f63114a6963fd8cccffb3d06b44a0350)
 
-### 3. Set Up Webhooks
 
-#### Next.js App Router (13+)
+## Webhook Events
+
+The package automatically handles the following Stripe webhook events:
+
+### Subscription Events
+- `subscription.created`: When a new subscription is created
+- `subscription.updated`: When a subscription is modified
+- `subscription.deleted`: When a subscription is removed
+- `customer.subscription.updated`: When customer subscription details change
+- `customer.subscription.deleted`: When a customer's subscription is cancelled
+
+### Payment Events
+- `payment_intent.succeeded`: When a payment is successful
+- `invoice.paid`: When an invoice is paid
+- `invoice.payment_failed`: When a payment attempt fails
+
+All these events automatically sync the subscription state with your Supabase database. See **handleWebhooks** for more details.
+
+## Helper Functions
+
+
+These helper functions make subscription management straightforward. Here's how to use each one:
+
+#### Cancel a Subscription
+Perfect for when users want to cancel their subscription:
 ```javascript
-// app/api/webhooks/route.js
-import { NextResponse } from 'next/server';
-import SubscriptionHelper from 'saas-subscription-helper';
-
-const subscriptionHelper = new SubscriptionHelper({
-    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabaseKey: process.env.SUPABASE_KEY,
-    table: "profiles",
-    emailField: "email",
-    subscriptionField: "subscription_status",
-    debug: true,           // Enable debug logging
-    debugHeaders: false    // Keep webhook headers private
-});
-
+// app/api/subscription/cancel/route.js
 export async function POST(req) {
-    const rawBody = await req.text();
-    const stripeSignature = req.headers.get("stripe-signature");
-
-    try {
-        const response = await subscriptionHelper.handleWebhooks({
-            rawBody,
-            stripeSignature,
-            headers: Object.fromEntries(req.headers)
-        });
-        
-        return NextResponse.json({ received: true });
-    } catch (err) {
-        console.error('Error processing webhook:', err);
-        return NextResponse.json({ error: err.message }, { status: 400 });
-    }
+    const { email } = await req.json();
+    await subscriptionHelper.cancelUserSubscription(email);
+    return NextResponse.json({ message: "Subscription cancelled" });
 }
 ```
 
-#### React with Express Backend
+#### Change Subscription Plan
+Ideal for upgrades or downgrades:
 ```javascript
-// server.js
-const express = require('express');
-const SubscriptionHelper = require('saas-subscription-helper');
-
-const subscriptionHelper = new SubscriptionHelper({
-    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabaseKey: process.env.SUPABASE_KEY,
-    table: "profiles",
-    emailField: "email",
-    subscriptionField: "subscription_status",
-    debug: true
-});
-
-const app = express();
-
-// Important: Use raw body for Stripe
-app.post('/api/webhooks', 
-    express.raw({ type: 'application/json' }),
-    async (req, res) => {
-        try {
-            const response = await subscriptionHelper.handleWebhooks({
-                rawBody: req.body,
-                stripeSignature: req.headers['stripe-signature'],
-                headers: req.headers
-            });
-            res.json({ received: true });
-        } catch (err) {
-            console.error('Webhook error:', err);
-            res.status(400).json({ error: err.message });
-        }
-    }
-);
-
-app.listen(3001);
+// app/api/subscription/change-plan/route.js
+export async function POST(req) {
+    const { email, newPriceId } = await req.json();
+    await subscriptionHelper.changePlan(email, newPriceId);
+    return NextResponse.json({ message: "Plan updated" });
+}
 ```
 
-#### React with Supabase Edge Functions
-```typescript
-// supabase/functions/stripe-webhook/index.ts
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { SubscriptionHelper } from 'saas-subscription-helper'
-
-const subscriptionHelper = new SubscriptionHelper({
-    stripeSecretKey: Deno.env.get('STRIPE_SECRET_KEY'),
-    stripeWebhookSecret: Deno.env.get('STRIPE_WEBHOOK_SECRET'),
-    supabaseUrl: Deno.env.get('SUPABASE_URL'),
-    supabaseKey: Deno.env.get('SUPABASE_KEY'),
-    table: "profiles",
-    emailField: "email",
-    subscriptionField: "subscription_status"
-})
-
-serve(async (req) => {
-    try {
-        const body = await req.text()
-        
-        const response = await subscriptionHelper.handleWebhooks({
-            rawBody: body,
-            stripeSignature: req.headers.get('stripe-signature'),
-            headers: Object.fromEntries(req.headers)
-        })
-        
-        return new Response(JSON.stringify({ received: true }))
-    } catch (err) {
-        return new Response(
-            JSON.stringify({ error: err.message }), 
-            { status: 400 }
-        )
-    }
-})
+#### Get Subscription Details
+Useful for displaying current subscription status:
+```javascript
+// app/api/subscription/details/route.js
+export async function GET(req) {
+    const email = req.nextUrl.searchParams.get('email');
+    const subscription = await subscriptionHelper.fetchSubscription(email);
+    return NextResponse.json(subscription);
+}
 ```
 
-Deploy your Edge Function:
-```bash
-supabase functions deploy stripe-webhook
+#### Force Sync Subscription
+Helpful when you need to manually sync Stripe with Supabase:
+```javascript
+// app/api/subscription/sync/route.js
+export async function POST(req) {
+    const { email } = await req.json();
+    await subscriptionHelper.syncSubscription(email);
+    return NextResponse.json({ message: "Subscription synced" });
+}
 ```
 
-**Note:** For both setups, configure your webhook URL in Stripe Dashboard:
-- Express: `http://your-domain.com/api/webhooks`
-- Edge Function: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`
+**Note:** Remember to implement proper authentication before exposing these endpoints.
 
-
-
-#### Test the Webhook
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks
-```
-
-This will print a webhook secret (whsec_xxx) that you should set as `STRIPE_WEBHOOK_SECRET` in your environment variables.
-
-**Important Notes:**
-- Use the webhook secret from `stripe listen` for local development
-- Use the webhook secret from Stripe Dashboard for production
-- Don't parse the request body before passing it to the webhook handler
-- Keep the `stripe-signature` header intact
-- Consider setting `debugHeaders: false` in production to keep webhook headers private
-
-### 4. Manage Upgrades and Cancellations
+### 5. Manage Upgrades and Cancellations
 
 All subscription management operations must be performed server-side for security. Here's how to implement upgrades and cancellations in different setups:
 
@@ -436,40 +414,51 @@ For best practices and advanced configuration tips, see our [Best Practices Guid
 - Use environment variables for sensitive configuration
 - Implement rate limiting on your subscription management endpoints
 
-### Configuration
+### Configuration Fields
 
-Required Fields:
-- stripeSecretKey: Your Stripe secret key
-- stripeWebhookSecret: The Stripe webhook signing secret
-- supabaseUrl: Your Supabase project URL
-- supabaseKey: Your Supabase service key
-- table: The Supabase table storing user data
-- emailField: The column in Supabase for user email
-- subscriptionField: The column for subscription status
+#### Required Fields
 
-Optional Fields:
-- planField: The column for storing plan/price IDs (default: 'plan')
-- createUserIfNotExists: Automatically create user record if not found (default: false)
-- debug: Enable debug logging (default: false)
-- debugHeaders: Log webhook headers (default: false, recommended false in production)
-- prorationBehavior: Stripe proration behavior for subscription changes (default: 'always_invoice')
-  - Options: 'always_invoice', 'create_prorations', 'none'
-- syncedStripeFields: Additional Stripe fields to sync with your database (all default to false)
-  - Available fields:
-    - stripe_customer_id: The Stripe Customer ID
-    - default_payment_method: The default payment method ID
-    - payment_last4: Last 4 digits of the card/payment method
-    - payment_brand: Card brand (visa, mastercard, etc.)
-    - payment_exp_month: Card expiration month
-    - payment_exp_year: Card expiration year
-    - current_period_start: Subscription period start date
-    - current_period_end: Subscription period end date
-    - cancel_at_period_end: Whether subscription will cancel at period end
-    - canceled_at: When the subscription was canceled
-    - trial: Whether the subscription is in trial period
-    - trial_start: Trial period start date
-    - trial_end: Trial period end date
-    - subscription_created_at: When the subscription was created
+| Field | Description | Example |
+|-------|-------------|---------|
+| `stripeSecretKey` | Your private Stripe API key used for server-side operations | `sk_test_...` |
+| `stripeWebhookSecret` | Secret used to verify Stripe webhook signatures | `whsec_...` |
+| `supabaseUrl` | Your Supabase project URL | `https://xxx.supabase.co` |
+| `supabaseKey` | Your Supabase service role key for database operations | `eyJhbGci...` |
+| `table` | Name of the Supabase table storing user data | `"users"` |
+| `emailField` | Column name for user email in your table | `"email"` |
+| `subscriptionField` | Column name for subscription status | `"subscription_status"` |
+
+#### Optional Fields
+
+| Field | Description | Default | Options |
+|-------|-------------|---------|----------|
+| `planField` | Column name for storing plan/price IDs | `"plan"` | Any valid column name |
+| `createUserIfNotExists` | Auto-create user records if not found | `false` | `true`/`false` |
+| `debug` | Enable detailed debug logging | `false` | `true`/`false` |
+| `debugHeaders` | Log webhook headers (not recommended in production) | `false` | `true`/`false` |
+| `prorationBehavior` | How Stripe handles plan change proration | `"always_invoice"` | `"always_invoice"`, `"create_prorations"`, `"none"` |
+
+#### Synced Stripe Fields (Optional)
+
+All fields default to `false` unless explicitly enabled in configuration.
+
+| Field | Description | Data Type |
+|-------|-------------|-----------|
+| `stripe_customer_id` | Stripe's unique customer identifier | `text` |
+| `default_payment_method` | ID of default payment method | `text` |
+| `payment_last4` | Last 4 digits of payment card | `text` |
+| `payment_brand` | Card brand (visa, mastercard, etc.) | `text` |
+| `payment_exp_month` | Card expiration month | `integer` |
+| `payment_exp_year` | Card expiration year | `integer` |
+| `current_period_start` | Start date of current billing period | `timestamp` |
+| `current_period_end` | End date of current billing period | `timestamp` |
+| `cancel_at_period_end` | Whether subscription will cancel at period end | `boolean` |
+| `canceled_at` | Timestamp of cancellation | `timestamp` |
+| `trial` | Whether subscription is in trial period | `boolean` |
+| `trial_start` | Trial period start date | `timestamp` |
+| `trial_end` | Trial period end date | `timestamp` |
+| `subscription_created_at` | When subscription was initially created | `timestamp` |
+
 
 Example configuration:
 ```javascript
@@ -557,75 +546,6 @@ const subscriptionHelper = new SubscriptionHelper({
 - `plan`: Stores the Stripe Price ID of the current subscription plan
 
 
-### Example with Debug Mode
-
-```javascript
-const subscriptionHelper = new SubscriptionHelper({
-    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabaseKey: process.env.SUPABASE_KEY,
-    table: "profiles",
-    emailField: "email",
-    subscriptionField: "subscription_status",
-    debug: true  // Enable debug logging
-});
-```
-
-When debug mode is enabled, you'll see detailed logs about:
-- Stripe API calls and responses
-- Supabase operations
-- Webhook processing
-- Subscription updates and cancellations
-- Error details
-
-### Helper Functions
-
-- `cancelUserSubscription(email)`: Cancel a user's subscription
-- `fetchSubscription(email)`: Fetch a user's subscription details from Stripe
-- `changePlan(email, newPriceId)`: Change a user's subscription plan
-- `syncSubscription(email)`: Sync a user's subscription details with Supabase
-
-### File Structure
-
-```
-saas-subscription-helper/
-├── src/
-│   ├── index.js                  # Main entry point for the package
-│   ├── stripe/
-│   │   ├── handleWebhooks.js     # Handles Stripe webhook events
-│   │   ├── cancelSubscription.js  # Logic for canceling subscriptions
-│   │   ├── fetchSubscription.js   # Retrieves subscription details from Stripe
-│   │   ├── changePlan.js         # Handles plan changes (upgrades/downgrades)
-│   |   ├── syncSubscription.js   # Syncs Stripe subscription data with Supabase
-│   │   └── index.js             # Exports Stripe-related functions
-│   └── supabase/
-│       ├── updateUser.js         # Updates user subscription data in Supabase
-│       ├── fetchUser.js          # Fetches user data from Supabase
-│       └── index.js             # Exports Supabase-related functions
-│   └── utils/
-│       ├── validateConfig.js     # Validates the configuration object
-├── examples/
-│   ├── react-server.js           # Example: Handling webhooks with a React backend
-│   ├── nextjs-webhooks.js        # Example: Handling webhooks with Next.js API routes
-├── README.md                     # Documentation for the package
-├── package.json                  # NPM metadata and dependencies
-├── LICENSE                       # MIT license file
-├── .env                          # Environment variables for development (ignored in production)
-└── .gitignore                    # Git ignored files and folders
-```
-
-
-### License
-This project is licensed under the MIT License. See the [LICENSE.md](./LICENSE.md) file for details.
-
-### Contributing
-Contributions are welcome! Feel free to fork the repository and submit pull requests.
-
-Author
-Created by Richardson Dackam.
-Follow me on GitHub.
-
 ### Manage Billing
 
 There are two ways to let your users manage their subscriptions through Stripe's Customer Portal:
@@ -697,4 +617,40 @@ function BillingPortalButton({ userEmail }) {
 ```
 
 Both approaches are fully supported by the subscription helper - any changes made in the portal will trigger webhooks that automatically update your Supabase database.
+
+
+
+
+### Example with Debug Mode
+
+```javascript
+const subscriptionHelper = new SubscriptionHelper({
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_KEY,
+    table: "profiles",
+    emailField: "email",
+    subscriptionField: "subscription_status",
+    debug: true  // Enable debug logging
+});
+```
+
+When debug mode is enabled, you'll see detailed logs about:
+- Stripe API calls and responses
+- Supabase operations
+- Webhook processing
+- Subscription updates and cancellations
+- Error details
+
+
+### License
+This project is licensed under the MIT License. See the [LICENSE.md](./LICENSE.md) file for details.
+
+### Contributing
+Contributions are welcome! Feel free to fork the repository and submit pull requests.
+
+Author
+Created by Richardson Dackam.
+Follow me on GitHub.
 

@@ -30,7 +30,7 @@ const result = await subscriptionHelper.changeUserPlan('user@example.com', 'pric
 - Preserves trial periods if configured
 - Returns detailed result object
 
--#### Upgrade Subscription
+#### Upgrade Subscription
 -```js
 -const result = await subscriptionHelper.upgradeSubscription('user@example.com', 'price_new');
 -```
@@ -581,7 +581,6 @@ When debug mode is enabled, you'll see detailed logs about:
 
 ### Helper Functions
 
-- `upgradeUserSubscription(email, newPriceId)`: Upgrade a user's subscription to a new plan
 - `cancelUserSubscription(email)`: Cancel a user's subscription
 - `fetchSubscription(email)`: Fetch a user's subscription details from Stripe
 - `changePlan(email, newPriceId)`: Change a user's subscription plan
@@ -595,7 +594,6 @@ saas-subscription-helper/
 │   ├── index.js                  # Main entry point for the package
 │   ├── stripe/
 │   │   ├── handleWebhooks.js     # Handles Stripe webhook events
-│   │   ├── upgradeSubscription.js # Logic for upgrading subscriptions
 │   │   ├── cancelSubscription.js  # Logic for canceling subscriptions
 │   │   ├── fetchSubscription.js   # Retrieves subscription details from Stripe
 │   │   ├── changePlan.js         # Handles plan changes (upgrades/downgrades)
@@ -627,4 +625,76 @@ Contributions are welcome! Feel free to fork the repository and submit pull requ
 Author
 Created by Richardson Dackam.
 Follow me on GitHub.
+
+### Manage Billing
+
+There are two ways to let your users manage their subscriptions through Stripe's Customer Portal:
+
+#### 1. Quick Setup: Direct Link (Recommended for MVP)
+The simplest approach is to use Stripe's hosted billing portal login page. Users will receive a secure link via email to access their billing settings.
+
+```javascript
+// Add this link to your app's UI
+<a href="https://billing.stripe.com/p/login/YOUR_PORTAL_ID">Manage Billing</a>
+```
+
+[![Billing Portal Flow](https://i.gyazo.com/075de020a7993ce0af8c2b250bc8badc.png)](https://gyazo.com/075de020a7993ce0af8c2b250bc8badc)
+
+When users click the link:
+1. They enter their email
+2. Stripe sends them a secure login link
+3. They can manage their subscription, update payment methods, and view invoices
+
+The subscription helper automatically handles any changes made through the portal via webhooks.
+
+#### 2. Direct Portal Access (Advanced)
+For a more seamless experience, you can create a portal session for logged-in users:
+
+```javascript
+// app/api/create-portal-session/route.js
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+export async function POST(req) {
+    const { email } = await req.json();
+    
+    // Get Stripe customer ID for the user
+    const customer = await stripe.customers.list({
+        email: email,
+        limit: 1
+    });
+    
+    // Create portal session
+    const session = await stripe.billingPortal.sessions.create({
+        customer: customer.data[0].id,
+        return_url: 'https://your-site.com/account'
+    });
+    
+    return new Response(JSON.stringify({ url: session.url }));
+}
+```
+
+```javascript
+// Client component
+function BillingPortalButton({ userEmail }) {
+    const openPortal = async () => {
+        const res = await fetch('/api/create-portal-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail })
+        });
+        const { url } = await res.json();
+        window.location.href = url;
+    };
+
+    return (
+        <button onClick={openPortal}>
+            Manage Billing
+        </button>
+    );
+}
+```
+
+Both approaches are fully supported by the subscription helper - any changes made in the portal will trigger webhooks that automatically update your Supabase database.
 

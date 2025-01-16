@@ -382,4 +382,326 @@ describe('handleWebhooks', () => {
 
         consoleSpy.mockRestore();
     });
+
+    it('logs debug info when signature is missing', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        const headers = { 'other-header': 'value' };
+        const rawBody = JSON.stringify({ type: 'test' });
+        
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                debugHeaders: true
+            }, rawBody, headers)
+        ).rejects.toThrow('No Stripe signature found');
+
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Missing Stripe signature');
+        expect(consoleSpy).toHaveBeenCalledWith('Available headers:', ['other-header']);
+        consoleSpy.mockRestore();
+    });
+
+    it('logs debug message on update failure', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        // Mock with correct chain structure
+        mockSupabase.from.mockImplementation(() => ({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: { id: 1, email: 'test@example.com' },
+                        error: null
+                    })
+                })
+            }),
+            update: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    select: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: new Error('Update failed')
+                    })
+                })
+            })
+        }));
+
+        const event = {
+            type: 'customer.subscription.updated',
+            data: { 
+                object: {
+                    customer_email: 'test@example.com',
+                    status: 'active',
+                    items: { 
+                        data: [{ price: { id: 'price_123' } }] 
+                    }
+                }
+            }
+        };
+
+        mockStripe.webhooks.constructEvent.mockReturnValue(event);
+
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                table: 'users',
+                emailField: 'email',
+                subscriptionField: 'subscription_status',
+                planField: 'plan'
+            }, JSON.stringify(event), { 'stripe-signature': 'test' })
+        ).rejects.toThrow('Update failed');
+
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Failed to update user subscription details');
+        consoleSpy.mockRestore();
+    });
+
+    it('logs available headers when signature is missing and debugHeaders enabled', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        const headers = { 
+            'content-type': 'application/json',
+            'other-header': 'value'
+        };
+        
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                debugHeaders: true
+            }, 'test-body', headers)
+        ).rejects.toThrow('No Stripe signature found');
+
+        // Verify both debug messages
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Missing Stripe signature');
+        expect(consoleSpy).toHaveBeenCalledWith('Available headers:', ['content-type', 'other-header']);
+
+        consoleSpy.mockRestore();
+    });
+
+    it('handles update error with debug logging', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        const event = {
+            type: 'customer.subscription.updated',
+            data: { 
+                object: {
+                    customer: 'cus_123',  // Remove customer_email to force email retrieval
+                    status: 'active',
+                    items: { 
+                        data: [{ price: { id: 'price_123' } }] 
+                    }
+                }
+            }
+        };
+
+        // Mock customer retrieve to fail
+        mockStripe.customers.retrieve.mockRejectedValue(new Error('Customer not found'));
+        mockStripe.webhooks.constructEvent.mockReturnValue(event);
+
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                table: 'users',
+                emailField: 'email',
+                subscriptionField: 'subscription_status',
+                planField: 'plan'
+            }, JSON.stringify(event), { 'stripe-signature': 'test' })
+        ).rejects.toThrow('Customer not found');
+
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Failed to update user subscription details');
+        consoleSpy.mockRestore();
+    });
+
+    it('handles webhook construction failure with debug logging', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        // Mock webhook construction to fail
+        mockStripe.webhooks.constructEvent.mockImplementation(() => {
+            throw new Error('Invalid webhook signature');
+        });
+
+        const rawBody = JSON.stringify({ type: 'test' });
+        const headers = { 'stripe-signature': 'invalid_signature' };
+
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                stripeWebhookSecret: 'test_secret'
+            }, rawBody, headers)
+        ).rejects.toThrow('Invalid webhook signature');
+
+        // Verify debug message from outer catch block
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Failed to process webhook');
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should not log headers when debugHeaders is false', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        const headers = { 'content-type': 'application/json' };
+        
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                debugHeaders: false
+            }, 'test-body', headers)
+        ).rejects.toThrow('No Stripe signature found');
+
+        expect(consoleSpy).not.toHaveBeenCalledWith('Available headers:', expect.any(Array));
+        consoleSpy.mockRestore();
+    });
+
+    it('should handle missing headers with debugHeaders enabled', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true,
+                debugHeaders: true
+            }, 'test-body', null)
+        ).rejects.toThrow('No Stripe signature found');
+
+        expect(consoleSpy).not.toHaveBeenCalledWith('Available headers:', expect.any(Array));
+        consoleSpy.mockRestore();
+    });
+
+    it('should not log debug message when debug is disabled', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        mockSupabase.from.mockImplementation(() => ({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: { id: 1, email: 'test@example.com' }
+                    })
+                })
+            }),
+            update: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    select: jest.fn().mockRejectedValue(new Error('Update failed'))
+                })
+            })
+        }));
+
+        const event = {
+            type: 'customer.subscription.updated',
+            data: { 
+                object: {
+                    customer_email: 'test@example.com',
+                    status: 'active',
+                    items: { data: [{ price: { id: 'price_123' } }] }
+                }
+            }
+        };
+
+        mockStripe.webhooks.constructEvent.mockReturnValue(event);
+
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: false
+            }, JSON.stringify(event), { 'stripe-signature': 'test' })
+        ).rejects.toThrow('Update failed');
+
+        expect(consoleSpy).not.toHaveBeenCalledWith('[DEBUG] Error: Failed to update user subscription details');
+        consoleSpy.mockRestore();
+    });
+
+    it('handles missing raw body with debug enabled', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        await expect(
+            handleWebhooks({
+                ...config,
+                debug: true
+            }, undefined, { 'stripe-signature': 'test' })
+        ).rejects.toThrow('No request body found');
+
+        expect(consoleSpy).toHaveBeenCalledWith('[DEBUG] Error: Missing raw request body');
+        consoleSpy.mockRestore();
+    });
+
+    it('handles subscription with trial status', async () => {
+        const consoleSpy = jest.spyOn(console, 'log');
+        
+        const event = {
+            type: 'customer.subscription.updated',
+            data: {
+                object: {
+                    id: 'sub_123',
+                    customer: 'cus_123',
+                    customer_email: 'test@example.com',
+                    status: 'active',
+                    trial_end: 1704067200, // Example timestamp
+                    items: {
+                        data: [{ price: { id: 'price_123' } }]
+                    }
+                }
+            }
+        };
+
+        mockStripe.webhooks.constructEvent.mockReturnValue(event);
+
+        await handleWebhooks({
+            ...config,
+            debug: true,
+            syncedStripeFields: {
+                trial: true
+            }
+        }, JSON.stringify(event), { 'stripe-signature': 'test' });
+
+        // Verify the update included trial data
+        expect(mockSupabase.from().update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                trial: true,
+                trial_end: new Date(1704067200 * 1000)
+            })
+        );
+
+        consoleSpy.mockRestore();
+    });
+
+    it('handles subscription without trial when trial sync enabled', async () => {
+        const event = {
+            type: 'customer.subscription.updated',
+            data: {
+                object: {
+                    id: 'sub_123',
+                    customer: 'cus_123',
+                    customer_email: 'test@example.com',
+                    status: 'active',
+                    trial_end: null,
+                    items: {
+                        data: [{ price: { id: 'price_123' } }]
+                    }
+                }
+            }
+        };
+
+        mockStripe.webhooks.constructEvent.mockReturnValue(event);
+
+        await handleWebhooks({
+            ...config,
+            syncedStripeFields: {
+                trial: true
+            }
+        }, JSON.stringify(event), { 'stripe-signature': 'test' });
+
+        // Verify the update included trial data
+        expect(mockSupabase.from().update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                trial: false
+            })
+        );
+        expect(mockSupabase.from().update).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                trial_end: expect.any(Date)
+            })
+        );
+    });
 }); 

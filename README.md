@@ -1,4 +1,4 @@
-# SaaS Subscription Helper 🚧 (in development)
+# SaaS Subscription Helper 💳
 
 <p align="center">
   <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/2560px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" height="40" style="display: inline-block; margin-right: 20px"/>
@@ -35,7 +35,7 @@ View this project on GitHub: [https://github.com/richardsondx/saas-subscription-
 
 ### Subscription Management
 
-#### Change Plan
+#### Change Plan (upgrade or downgrade)
 ```js
 const result = await subscriptionHelper.changeUserPlan('user@example.com', 'price_new');
 ```
@@ -45,10 +45,6 @@ const result = await subscriptionHelper.changeUserPlan('user@example.com', 'pric
 - Preserves trial periods if configured
 - Returns detailed result object
 
-#### Upgrade Subscription
-```js
-const result = await subscriptionHelper.upgradeSubscription('user@example.com', 'price_new');
-```
 
 Upgrades a user's subscription to a new plan
 
@@ -97,7 +93,7 @@ Create a shared configuration file that you'll use throughout your application:
 
 ```javascript
 // lib/subscription.js
-const SubscriptionHelper = require('saas-subscription-helper');
+import { SubscriptionHelper } from 'saas-subscription-helper';
 
 export const subscriptionHelper = new SubscriptionHelper({
     stripeApiKey: process.env.STRIPE_SECRET_KEY,
@@ -254,15 +250,46 @@ All subscription management operations must be performed server-side for securit
 #### Upgrade Subscription
 #### Next.js App Router (13+)
 ```javascript
+// lib/subscription.js
+import { SubscriptionHelper } from 'saas-subscription-helper';
+
+export const subscriptionHelper = new SubscriptionHelper({
+    stripeApiKey: process.env.STRIPE_SECRET_KEY,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_KEY,
+    table: 'users',
+    emailField: 'email',
+    subscriptionField: 'subscription_status',
+});
+
 // app/api/subscription/upgrade/route.js
 import { NextResponse } from 'next/server';
-import { SubscriptionHelper } from 'saas-subscription-helper';
+import { subscriptionHelper } from '@/lib/subscription';
 
 export async function POST(req) {
     try {
         const { email, newPriceId } = await req.json();
         
-        await subscriptionHelper.upgradeUserSubscription(email, newPriceId);
+        await subscriptionHelper.changeUserPlan(email, newPriceId);
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+}
+```
+
+#### Downgrade Subscription
+
+```javascript
+// app/api/subscription/downgrade/route.js
+import { NextResponse } from 'next/server';
+import { subscriptionHelper } from '@/lib/subscription';
+
+export async function POST(req) {
+    try {
+        const { email, newPriceId } = await req.json();
+        
+        await subscriptionHelper.changeUserPlan(email, newPriceId);
         return NextResponse.json({ success: true });
     } catch (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
@@ -288,22 +315,36 @@ export async function POST(req) {
 #### React with Express Backend
 ```javascript
 // server.js
+import { subscriptionHelper } from './lib/subscription.js';
+
 app.post('/api/subscription/upgrade', async (req, res) => {
     try {
         const { email, newPriceId } = req.body;
         
-        await subscriptionHelper.upgradeUserSubscription(email, newPriceId);
+        await subscriptionHelper.changeUserPlan(email, newPriceId);
         res.json({ success: true });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
+app.post('/api/subscription/downgrade', async (req, res) => {
+    try {
+        const { email, newPriceId } = req.body;
+        
+        await subscriptionHelper.changeUserPlan(email, newPriceId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+
 app.post('/api/subscription/cancel', async (req, res) => {
     try {
         const { email } = req.body;
         
-        await subscriptionHelper.cancelUserSubscription(email);
+        await subscriptionHelper.cancelSubscription(email);
         res.json({ success: true });
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -313,14 +354,21 @@ app.post('/api/subscription/cancel', async (req, res) => {
 
 #### React with Supabase Edge Functions
 ```typescript
-// supabase/functions/subscription-manage/index.ts
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+// supabase/functions/lib/subscription.ts
 import { SubscriptionHelper } from 'saas-subscription-helper'
 
-const subscriptionHelper = new SubscriptionHelper({
+export const subscriptionHelper = new SubscriptionHelper({
     stripeSecretKey: Deno.env.get('STRIPE_SECRET_KEY'),
-    // ... other config
-})
+    supabaseUrl: Deno.env.get('SUPABASE_URL'),
+    supabaseKey: Deno.env.get('SUPABASE_SERVICE_KEY'),
+    table: 'users',
+    emailField: 'email',
+    subscriptionField: 'subscription_status',
+});
+
+// supabase/functions/subscription-manage/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { subscriptionHelper } from '../lib/subscription.ts'
 
 serve(async (req) => {
     try {

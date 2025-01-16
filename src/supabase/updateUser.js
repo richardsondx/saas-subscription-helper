@@ -2,6 +2,9 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
+// Cache the Supabase client
+let supabaseClient = null;
+
 async function updateUser(config, email, subscriptionDetails) {
     if (config.debug) {
         console.log('[DEBUG] UpdateUser called with:', {
@@ -12,17 +15,72 @@ async function updateUser(config, email, subscriptionDetails) {
         });
     }
 
-    const supabase = createClient(config.supabaseUrl, config.supabaseKey);
-
     try {
+        // Initialize client for each request
+        const supabaseClient = createClient(
+            config.supabaseUrl, 
+            config.supabaseKey,
+            {
+                auth: { 
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                },
+                global: {
+                    headers: {
+                        'X-Client-Info': '@supabase/auth-helpers-nextjs'
+                    }
+                }
+            }
+        );
+
         // First check if the user exists
-        const { data: existingUser, error: fetchError } = await supabase
+        const { data: existingUser, error: fetchError } = await supabaseClient
             .from(config.table)
             .select('*')
             .eq(config.emailField, email)
             .single();
 
-        if (fetchError) {
+        // Handle the case where user doesn't exist
+        if (fetchError?.code === 'PGRST116') {
+            if (config.debug) {
+                console.log('[DEBUG] User not found in database:', { 
+                    email,
+                    table: config.table
+                });
+            }
+
+            // If createUserIfNotExists is enabled, create the user
+            if (config.createUserIfNotExists) {
+                if (config.debug) console.log('[DEBUG] Attempting to create user...');
+                
+                const { data: newUser, error: createError } = await supabaseClient
+                    .from(config.table)
+                    .insert({
+                        [config.emailField]: email,
+                        ...subscriptionDetails
+                    })
+                    .select()
+                    .single();
+
+                if (createError) {
+                    if (config.debug) {
+                        console.error('[DEBUG] Error creating user:', {
+                            error: createError,
+                            email
+                        });
+                    }
+                    throw new Error(`Failed to create user: ${createError.message}`);
+                }
+
+                if (config.debug) console.log('[DEBUG] User created successfully');
+                return newUser;
+            } else {
+                // If auto-creation is disabled, throw a more specific error
+                throw new Error(`User with email ${email} not found in ${config.table}`);
+            }
+        } else if (fetchError) {
+            // Handle other fetch errors
             if (config.debug) {
                 console.error('[DEBUG] Error checking existing user:', {
                     error: fetchError,
@@ -32,15 +90,8 @@ async function updateUser(config, email, subscriptionDetails) {
             throw new Error(`User check failed: ${fetchError.message}`);
         }
 
-        if (!existingUser) {
-            if (config.debug) {
-                console.error('[DEBUG] User not found:', { email });
-            }
-            throw new Error(`User with email ${email} not found`);
-        }
-
-        // Perform the update
-        const { data, error } = await supabase
+        // Proceed with update if user exists
+        const { data, error } = await supabaseClient
             .from(config.table)
             .update(subscriptionDetails)
             .eq(config.emailField, email)

@@ -422,6 +422,7 @@ Required Fields:
 
 Optional Fields:
 - planField: The column for storing plan/price IDs (default: 'plan')
+- createUserIfNotExists: Automatically create user record if not found (default: false)
 - debug: Enable debug logging (default: false)
 - debugHeaders: Log webhook headers (default: false, recommended false in production)
 - prorationBehavior: Stripe proration behavior for subscription changes (default: 'always_invoice')
@@ -457,6 +458,7 @@ const subscriptionHelper = new SubscriptionHelper({
     
     // Optional fields
     planField: "stripe_plan",
+    createUserIfNotExists: true, // Will create a new user record if email not found
     debug: true,
     debugHeaders: false,
     prorationBehavior: 'create_prorations',

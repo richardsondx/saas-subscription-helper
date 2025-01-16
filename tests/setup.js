@@ -14,15 +14,27 @@ const mockSupabase = {
                 }))
             }))
         })),
-        // Fix update chain to support .eq().select()
         update: jest.fn(() => ({
             eq: jest.fn(() => ({
                 select: jest.fn(() => Promise.resolve({
-                    data: {
+                    data: [{
                         id: 1,
                         email: 'test@example.com',
                         subscription_status: 'active',
                         plan: 'price_basic'
+                    }],
+                    error: null
+                }))
+            }))
+        })),
+        insert: jest.fn(() => ({
+            select: jest.fn(() => ({
+                single: jest.fn(() => Promise.resolve({
+                    data: {
+                        id: 1,
+                        email: 'test@example.com',
+                        subscription_status: 'active',
+                        plan: 'basic'
                     },
                     error: null
                 }))
@@ -106,7 +118,6 @@ module.exports = {
     mockStripe,
     // Helper to simulate different Supabase responses
     mockSupabaseResponse: (data = null, error = null) => {
-        // Reset the chain of mocks but preserve structure for all tests
         mockSupabase.from.mockImplementation(() => ({
             select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
@@ -115,10 +126,19 @@ module.exports = {
             }),
             update: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
-                    select: jest.fn().mockResolvedValue({ data, error })
+                    select: jest.fn().mockResolvedValue({ 
+                        data: data ? [data] : null, 
+                        error 
+                    })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ data, error })
                 })
             })
         }));
+        return mockSupabase;
     }
 };
 

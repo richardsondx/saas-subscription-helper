@@ -7,15 +7,28 @@ describe('updateUser', () => {
         supabaseKey: 'test-key',
         table: 'users',
         emailField: 'email',
-        debug: true
+        debug: true,
+        createUserIfNotExists: false
     };
 
     let updateMock;
 
     beforeEach(() => {
         jest.clearAllMocks();
+        updateMock = jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+                select: jest.fn().mockResolvedValue({
+                    data: [{
+                        id: 1,
+                        email: 'test@example.com',
+                        subscription_status: 'active',
+                        plan: 'premium'
+                    }],
+                    error: null
+                })
+            })
+        });
 
-        // Setup the mock chain properly
         const mockData = {
             id: 1,
             email: 'test@example.com',
@@ -23,17 +36,6 @@ describe('updateUser', () => {
             plan: 'premium'
         };
 
-        // Create a mock for the update function
-        updateMock = jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-                select: jest.fn().mockResolvedValue({
-                    data: [mockData],
-                    error: null
-                })
-            })
-        });
-
-        // Mock for initial user check and update
         mockSupabase.from.mockImplementation(() => ({
             select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
@@ -43,7 +45,15 @@ describe('updateUser', () => {
                     })
                 })
             }),
-            update: updateMock  // Use the update mock
+            update: updateMock,
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: mockData,
+                        error: null
+                    })
+                })
+            })
         }));
     });
 
@@ -62,10 +72,18 @@ describe('updateUser', () => {
     });
 
     it('handles user not found', async () => {
-        // Override mock for this test case
         mockSupabase.from.mockImplementation(() => ({
             select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: { code: 'PGRST116' }
+                    })
+                })
+            }),
+            update: updateMock,
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
                     single: jest.fn().mockResolvedValue({
                         data: null,
                         error: null
@@ -78,7 +96,7 @@ describe('updateUser', () => {
             updateUser(config, 'nonexistent@example.com', {
                 subscription_status: 'active'
             })
-        ).rejects.toThrow('User with email nonexistent@example.com not found');
+        ).rejects.toThrow('User with email nonexistent@example.com not found in users');
     });
 
     it('handles database errors', async () => {
@@ -207,12 +225,20 @@ describe('updateUser', () => {
     });
 
     it('logs debug information for user not found', async () => {
-        const consoleSpy = jest.spyOn(console, 'error');
+        const consoleSpy = jest.spyOn(console, 'log');
         
-        // Mock user not found
         mockSupabase.from.mockImplementation(() => ({
             select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: { code: 'PGRST116' }
+                    })
+                })
+            }),
+            update: updateMock,
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
                     single: jest.fn().mockResolvedValue({
                         data: null,
                         error: null
@@ -223,13 +249,13 @@ describe('updateUser', () => {
 
         await expect(
             updateUser(config, 'nonexistent@example.com', { status: 'active' })
-        ).rejects.toThrow('User with email nonexistent@example.com not found');
+        ).rejects.toThrow('User with email nonexistent@example.com not found in users');
 
-        // Verify user not found debug logs
         expect(consoleSpy).toHaveBeenCalledWith(
-            '[DEBUG] User not found:',
+            '[DEBUG] User not found in database:',
             expect.objectContaining({
-                email: 'nonexistent@example.com'
+                email: 'nonexistent@example.com',
+                table: 'users'
             })
         );
     });
@@ -272,35 +298,96 @@ describe('updateUser', () => {
         consoleSpy.mockRestore();
     });
 
-    it('logs debug information when user is not found', async () => {
-        const consoleSpy = jest.spyOn(console, 'error');
-        
-        // Mock Supabase to return no user and no error
+    it('handles user not found when createUserIfNotExists is false', async () => {
+        // Mock user not found response (PGRST116 is the "not found" code)
         mockSupabase.from.mockImplementation(() => ({
             select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
                     single: jest.fn().mockResolvedValue({
                         data: null,
-                        error: null
+                        error: { code: 'PGRST116' }
                     })
                 })
             })
         }));
 
         await expect(
-            updateUser(config, 'nonexistent@example.com', { status: 'active' })
-        ).rejects.toThrow('User with email nonexistent@example.com not found');
+            updateUser(config, 'nonexistent@example.com', {
+                subscription_status: 'active'
+            })
+        ).rejects.toThrow('User with email nonexistent@example.com not found in users');
+    });
 
-        // Verify user not found debug logs
-        expect(consoleSpy).toHaveBeenCalledWith(
-            '[DEBUG] User not found:',
-            {
-                email: 'nonexistent@example.com'
-            }
-        );
+    it('creates new user when createUserIfNotExists is true', async () => {
+        const configWithCreate = {
+            ...config,
+            createUserIfNotExists: true
+        };
 
-        // Clean up
-        consoleSpy.mockRestore();
+        const newUserData = {
+            id: 2,
+            email: 'new@example.com',
+            subscription_status: 'active'
+        };
+
+        // Mock user not found, then successful creation
+        mockSupabase.from.mockImplementation(() => ({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: { code: 'PGRST116' }
+                    })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: newUserData,
+                        error: null
+                    })
+                })
+            })
+        }));
+
+        const result = await updateUser(configWithCreate, 'new@example.com', {
+            subscription_status: 'active'
+        });
+
+        expect(result).toEqual(newUserData);
+    });
+
+    it('handles creation error when createUserIfNotExists is true', async () => {
+        const configWithCreate = {
+            ...config,
+            createUserIfNotExists: true
+        };
+
+        // Mock user not found, then failed creation
+        mockSupabase.from.mockImplementation(() => ({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: { code: 'PGRST116' }
+                    })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: { message: 'Creation failed' }
+                    })
+                })
+            })
+        }));
+
+        await expect(
+            updateUser(configWithCreate, 'new@example.com', {
+                subscription_status: 'active'
+            })
+        ).rejects.toThrow('Failed to create user: Creation failed');
     });
 
     // Clean up after each test

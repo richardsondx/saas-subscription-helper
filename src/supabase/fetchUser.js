@@ -1,5 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Cache the Supabase client
+let supabaseClient = null;
+
 async function fetchUser(config, email) {
     if (config.debug) console.log(`[DEBUG] Attempting to fetch user with email: ${email}`);
     
@@ -8,15 +11,41 @@ async function fetchUser(config, email) {
         throw new Error('Email is required to fetch user');
     }
 
-    if (config.debug) console.log('[DEBUG] Creating Supabase client...');
-    const supabase = createClient(
-        config.supabaseUrl,
-        config.supabaseKey
-    );
-
     try {
+        // Initialize or reuse client with cross-fetch
+        if (!supabaseClient) {
+            if (config.debug) console.log('[DEBUG] Creating Supabase client...');
+            
+            // Use cross-fetch for compatibility
+            const customFetch = (...args) => {
+                // Use global fetch with error handling
+                return fetch(...args).catch(err => {
+                    console.error('[DEBUG] Fetch error:', err);
+                    throw new Error(`Fetch failed: ${err.message}`);
+                });
+            };
+
+            supabaseClient = createClient(
+                config.supabaseUrl,
+                config.supabaseKey,
+                {
+                    auth: { 
+                        persistSession: false,
+                        autoRefreshToken: false,
+                        detectSessionInUrl: false
+                    },
+                    global: {
+                        headers: {
+                            'X-Client-Info': '@supabase/auth-helpers-nextjs'
+                        },
+                        fetch: customFetch
+                    }
+                }
+            );
+        }
+
         if (config.debug) console.log(`[DEBUG] Querying table: ${config.table || 'users'}`);
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from(config.table || 'users')
             .select('*')
             .eq(config.emailField || 'email', email)
